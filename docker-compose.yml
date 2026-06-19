@@ -1,0 +1,9 @@
+services:
+  reviewer:
+    build: .
+    container_name: code-reviewer
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    env_file:
+      - .env
