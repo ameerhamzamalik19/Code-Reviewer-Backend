@@ -1,8 +1,8 @@
 from database.database import Base
-from sqlalchemy import Column, Integer, String, DateTime
-# from datetime import datetime
+from sqlalchemy import Column, Integer, String, DateTime, text, Text
 from datetime import datetime, timezone
 
+        # USERS TABLE
 class User(Base):
     __tablename__ = "users"
 
@@ -13,6 +13,26 @@ class User(Base):
     # created_at = Column(DateTime, default=datetime.now(datetime.timezone.utc))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    def verify_password(self, password: str) -> bool:
-        # This method will be implemented in the future to verify the password using bcrypt
-        pass
+
+        # REVIEWED_SESSIONS TABLE
+class ReviewSession(Base):
+    __tablename__ = "reviewed_sessions"
+
+    session_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+
+    type = Column(String(20))
+    pr_url = Column(Text, nullable=False)
+    repo_path = Column(Text, nullable=False)
+
+    created_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )

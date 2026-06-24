@@ -78,7 +78,8 @@ def validate_refresh_token(token: str, db: Session) -> User:
 
     # Check against Redis
     stored_token = get_refresh_token(username)
-    if stored_token is None or stored_token.decode() != token:  # stored_token is bytes
+    print(f"Validating refresh token for user: {username}. Stored token: {stored_token}, Provided token: {token}")  # Debugging line
+    if stored_token is None or stored_token != token:  # stored_token is bytes
         raise ValueError("Refresh token revoked or expired")
 
     # Get user from DB

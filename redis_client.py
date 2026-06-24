@@ -2,8 +2,8 @@ import redis
 import json
 
 # Connect to the Redis container running on localhost
-r = redis.Redis(host='redis', port=6379, decode_responses=True)    #UNCOMMENT THIS LINE IF USING DOCKER
-# r = redis.Redis(host='localhost', port=6379, decode_responses=True)   #UNCOMMENT THIS LINE IF RUNNING LOCALLY
+# r = redis.Redis(host='redis', port=6379, decode_responses=True)    #UNCOMMENT THIS LINE IF USING DOCKER
+r = redis.Redis(host='localhost', port=6379, decode_responses=True)   #UNCOMMENT THIS LINE IF RUNNING LOCALLY
 
 # Optional: test the connection
 try:

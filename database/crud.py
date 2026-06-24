@@ -1,68 +1,9 @@
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from database.models import User
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from database.models import User, ReviewSession
 import bcrypt
-from email_validator import validate_email, EmailNotValidError
-import re
-
-def is_valid_email(email: str) -> bool:
-    try:
-        # The `validate_email` function does the heavy lifting.
-        # `check_deliverability=True` will also check if the domain has valid MX records.
-        # For a signup form, you generally want this check.
-        validation = validate_email(email, check_deliverability=True)
-        # The library also provides a normalized form of the email, which is good to store.
-        normalized_email = validation.normalized
-        return normalized_email
-    except EmailNotValidError as e:
-        # The exception message (`str(e)`) is a human-readable explanation.
-        print(f"Invalid email: {e}")
-        return False
-    
-def check_user_exists(db: Session, username: str, email: str):
-    """
-    Raises ValueError if a user with the given username or email already exists.
-    """
-    existing = db.query(User).filter(
-        (User.user_name == username) | (User.email == email)
-    ).first()
-    if existing:
-        if existing.user_name == username:
-            raise ValueError("Username already taken")
-        else:  # email matches
-            raise ValueError("Email already registered")
-
-def create_user_validator(db: Session, username: str, email: str, password: str):
-
-    if not username or not email or not password:
-        raise ValueError("Username, email, and password are required")
-
-    if not re.match(r'^[A-Za-z0-9_]+$', username):
-        raise ValueError("Username can only contain letters, numbers, and underscores")
-    
-    if len(username) < 3 or len(username) > 100:
-        raise ValueError("Username must be between 3 and 100 characters long")
-    
-    if len(email) > 320 or len(email) <= 0:
-        raise ValueError("Email must be 320 characters or fewer")
-    
-    is_email_valid = is_valid_email(email)
-
-    if not is_email_valid:
-        raise ValueError("Invalid email format")
-    
-    if len(password) < 6 or len(password) > 65:
-        raise ValueError("Password must be between 6 and 65 characters long")
-    
-    try:
-        check_user_exists(db, username, email)
-    except ValueError as ve:
-        print(f"User existence check failed: {ve}")
-        raise ve
-    
-    normalized_email = is_email_valid  # This is the normalized email returned by the validator
-
-    return normalized_email
+from database.validators import create_user_validator, ReviewSessionUpdateError
+from typing import Any
 
 def create_user(db: Session, username: str, email: str, password: str):
     """
@@ -115,3 +56,84 @@ def login_user(db: Session, username: str, password: str):
         raise ValueError("Invalid password")
 
     return user
+
+def create_review_session(db: Session, user: User, repo_type: str, pr_url: str, repo_path: str = "None"):
+    new_session = ReviewSession(
+        user_id = user.user_id,
+        type = repo_type,
+        pr_url = pr_url,
+        repo_path = repo_path
+    )
+
+    db.add(new_session)
+    try:
+        db.commit()
+        db.refresh(new_session)  # Loads the auto-generated ID into the object
+        return new_session.session_id
+    except IntegrityError as e:
+        db.rollback()  # VERY IMPORTANT: rollback the failed transaction
+
+        raise  ValueError(e)
+
+    
+def update_ReviewSession(
+    session_id: int,
+    column_name: str,
+    new_value: Any,
+    db_session: Session,
+    commit: bool = True
+) -> ReviewSession:
+    """
+    Update a single column of a ReviewSession record.
+
+    Args:
+        session_id: Primary key of the session to update.
+        column_name: Name of the column to update (must exist in ReviewSession).
+        new_value: New value to set for the column.
+        db_session: SQLAlchemy session.
+        commit: If True, commit the transaction; otherwise only flush.
+
+    Returns:
+        The updated ReviewSession object.
+
+    Raises:
+        ReviewSessionUpdateError: If column is invalid, session not found,
+                                  or a database error occurs.
+    """
+    # 1. Validate that the column exists in the ReviewSession model
+    if not hasattr(ReviewSession, column_name):
+        raise ReviewSessionUpdateError(
+            f"Column '{column_name}' does not exist in ReviewSession schema."
+        )
+
+    # Optional: prevent updating primary key or sensitive columns
+    if column_name == "session_id":
+        raise ReviewSessionUpdateError("Updating primary key 'session_id' is not allowed.")
+
+    # 2. Retrieve the session record
+    session_record = db_session.query(ReviewSession).filter(
+        ReviewSession.session_id == session_id
+    ).first()
+
+    if session_record is None:
+        raise ReviewSessionUpdateError(
+            f"ReviewSession with session_id {session_id} not found."
+        )
+
+    # 3. Update the attribute
+    try:
+        setattr(session_record, column_name, new_value)
+        # The `updated_at` column is automatically handled by `onupdate` if defined
+        if commit:
+            db_session.commit()
+        else:
+            db_session.flush()
+    except SQLAlchemyError as e:
+        db_session.rollback()
+        raise ReviewSessionUpdateError(
+            f"Database error while updating column '{column_name}': {str(e)}"
+        ) from e
+
+    # 4. Refresh to get any DB-generated values (e.g., updated_at)
+    db_session.refresh(session_record)
+    return session_record

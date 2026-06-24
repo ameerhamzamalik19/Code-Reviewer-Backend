@@ -14,3 +14,4 @@ psycopg[binary]==3.3.4
 bcrypt==5.0.0
 python-jose==3.5.0
 email-validator==2.3.0
+send2trash==2.1.0
